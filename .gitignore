@@ -1,0 +1,12 @@
+# Binaries and Object Files
+forge-stream
+src/*.o
+*.o
+
+# Local Large-Scale Datasets
+sample_data/ledger.csv
+sample_data/toxic_ledger.csv
+
+# Local Telemetry & Error Logs
+WJ_Error_Log.md
+.WJ_Ledger.md.swp
