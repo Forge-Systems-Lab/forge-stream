@@ -3,7 +3,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BUFFER_SIZE 65536 // 64KB Execution Block
+#define BUFFER_SIZE 65536
+
+// Zero-dependency, thread-safe, reentrant token extraction
+static char *extract_field(char **cursor) {
+    if (!cursor || !*cursor || **cursor == '\0') return NULL;
+    char *start = *cursor;
+    while (**cursor != '\0' && **cursor != ',') {
+        (*cursor)++;
+    }
+    if (**cursor == ',') {
+        **cursor = '\0';
+        (*cursor)++;
+    }
+    return start;
+}
 
 int parse_ledger(const char *filepath, LedgerSummary *summary) {
     if (!filepath || !summary) return -1;
@@ -35,24 +49,35 @@ int parse_ledger(const char *filepath, LedgerSummary *summary) {
                 if (line_pos > 0) {
                     summary->total_records++;
                     
-                    // Tokenize CSV parameters fields natively
-                    char *timestamp = strtok(line_buffer, ",");
-                    char *tx_id = strtok(NULL, ",");
-                    char *account_id = strtok(NULL, ",");
-                    char *amount_str = strtok(NULL, ",");
-                    char *currency = strtok(NULL, ",");
+                    char *cursor = line_buffer;
+                    char *timestamp = extract_field(&cursor);
+                    char *tx_id = extract_field(&cursor);
+                    char *account_id = extract_field(&cursor);
+                    char *amount_str = extract_field(&cursor);
+                    char *currency = extract_field(&cursor);
 
-                    if (timestamp && tx_id && account_id && amount_str && currency) {
-                        double amount = strtod(amount_str, NULL);
-                        summary->total_amount += amount;
-                        summary->valid_records++;
+                    // Defensive Firewall: Ensure all pointers exist and amount is populated
+                    if (timestamp && tx_id && account_id && amount_str && currency && *amount_str != '\0') {
+                        char *endptr;
+                        double amount = strtod(amount_str, &endptr);
+                        
+                        // Strict validation of the numeric transformation boundary
+                        if (endptr != amount_str) {
+                            summary->total_amount += amount;
+                            summary->valid_records++;
+                        } else {
+                            summary->error_records++;
+                        }
                     } else {
                         summary->error_records++;
                     }
                 }
                 line_pos = 0;
             } else {
-                line_buffer[line_pos++] = buffer[i];
+                // Natively sanitize Carriage Returns (\r) to guarantee absolute CRLF compatibility
+                if (buffer[i] != '\r') {
+                    line_buffer[line_pos++] = buffer[i];
+                }
             }
         }
     }
